@@ -1,0 +1,602 @@
+[
+  {
+    "JCL Flip and Fold": [
+      [
+        {
+          "name": "Diced Ham",
+          "tags": [
+            "Pork"
+          ]
+        },
+        {
+          "name": "Egg Whites",
+          "tags": [
+            "Eggs",
+            "Soy",
+            "Veggie"
+          ]
+        },
+        {
+          "name": "Fresh Spinach",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Sauteed Mushrooms",
+          "tags": [
+            "Soy",
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Sauteed Peppers & Onions",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Scrambled Eggs",
+          "tags": [
+            "Eggs",
+            "Veggie"
+          ]
+        },
+        {
+          "name": "Shredded Cheddar Cheese",
+          "tags": [
+            "Milk",
+            "Veggie"
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "JCL WOK": [
+      [
+        {
+          "name": "Asian Stir Fry Veg Mix",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Garlic Stir Fry Sauce",
+          "tags": [
+            "Soy",
+            "Vegan",
+            "Sesame"
+          ]
+        },
+        {
+          "name": "General Tso's Sauce",
+          "tags": [
+            "Wheat",
+            "Soy",
+            "Sesame",
+            "Peanuts",
+            "Tree_Nuts",
+            "Eggs",
+            "Shellfish",
+            "Fish"
+          ]
+        },
+        {
+          "name": "General Tso's Shrimp",
+          "tags": [
+            "Shellfish",
+            "Wheat",
+            "Soy"
+          ]
+        },
+        {
+          "name": "Korean Braised Tofu",
+          "tags": [
+            "Soy",
+            "Vegan",
+            "Sesame"
+          ]
+        },
+        {
+          "name": "Steamed White Rice",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Vegetable Egg Roll",
+          "tags": [
+            "Eggs",
+            "Soy",
+            "Veggie",
+            "Wheat",
+            "Sesame"
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "JCL Comfort": [
+      [
+        {
+          "name": "Hawaiian Huli Huli Chicken",
+          "tags": [
+            "Soy",
+            "Sesame"
+          ]
+        },
+        {
+          "name": "Mango Fried Rice",
+          "tags": [
+            "Eggs",
+            "Soy",
+            "Veggie",
+            "Sesame"
+          ]
+        },
+        {
+          "name": "Roasted Asian Blend Vegetables",
+          "tags": []
+        },
+        {
+          "name": "Sesame Broccoli",
+          "tags": [
+            "Soy",
+            "Vegan",
+            "Sesame"
+          ]
+        },
+        {
+          "name": "Vegetable Spring Rolls",
+          "tags": [
+            "Wheat",
+            "Soy",
+            "Veggie"
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "JCL Vegan Line": [
+      [
+        {
+          "name": "Basmati Rice",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Curried Chickpea Tofu",
+          "tags": [
+            "Soy",
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Harissa Roasted Vegetables",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Naan",
+          "tags": [
+            "Milk",
+            "Eggs",
+            "Soy",
+            "Veggie",
+            "Wheat"
+          ]
+        },
+        {
+          "name": "Spinach Saag Aloo",
+          "tags": [
+            "Tree_Nuts",
+            "Peanuts",
+            "Wheat",
+            "Vegan"
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "JCL Deli": [
+      [
+        {
+          "name": "12\" Flour Tortilla",
+          "tags": [
+            "Wheat",
+            "Soy",
+            "Vegan"
+          ]
+        },
+        {
+          "name": "12\" Tomato Tortilla",
+          "tags": [
+            "Wheat",
+            "Vegan"
+          ]
+        },
+        {
+          "name": "American Cheese Slices",
+          "tags": [
+            "Milk",
+            "Soy",
+            "Veggie"
+          ]
+        },
+        {
+          "name": "Black Olives",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Chicken Salad",
+          "tags": [
+            "Eggs",
+            "Soy"
+          ]
+        },
+        {
+          "name": "Chickpea &  Grape Salad",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Egg-free Mayonnaise",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Fresh Tomato Slices",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Guacamole",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Honey Wheat Bread",
+          "tags": [
+            "Milk",
+            "Soy",
+            "Wheat",
+            "Sesame"
+          ]
+        },
+        {
+          "name": "Housemade Hummus",
+          "tags": [
+            "Sesame",
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Mayonnaise",
+          "tags": [
+            "Eggs",
+            "Soy",
+            "Veggie"
+          ]
+        },
+        {
+          "name": "Mustard",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Potato Chip w/Trail Dust Seasoning",
+          "tags": [
+            "Milk",
+            "Soy"
+          ]
+        },
+        {
+          "name": "Shredded Romaine",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Sliced Green Pepper",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Sliced Pickles",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Sliced Provolone Cheese",
+          "tags": [
+            "Milk",
+            "Veggie"
+          ]
+        },
+        {
+          "name": "Sliced Red Onion",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Sliced Roast Turkey Breast",
+          "tags": []
+        },
+        {
+          "name": "Sriracha Mayonnaise",
+          "tags": [
+            "Eggs",
+            "Soy",
+            "Veggie",
+            "Sesame"
+          ]
+        },
+        {
+          "name": "Thinly Sliced Ham",
+          "tags": [
+            "Pork"
+          ]
+        },
+        {
+          "name": "White Bread",
+          "tags": [
+            "Milk",
+            "Wheat",
+            "Soy",
+            "Vegan"
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "JCL Grill": [
+      [
+        {
+          "name": "Avocado Tomatillo Salsa",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Beef Fajita Filling",
+          "tags": [
+            "Halal",
+            "Beef"
+          ]
+        },
+        {
+          "name": "Charro Beans",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Corn Tortillas",
+          "tags": [
+            "Vegan"
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "JCL Salad Bar": [
+      [
+        {
+          "name": "Banana",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Black Beans",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Blueberries",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Cantaloupe",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Cherry Tomatoes",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Chopped Hard Boiled Egg",
+          "tags": [
+            "Eggs",
+            "Veggie"
+          ]
+        },
+        {
+          "name": "Chopped Romaine Lettuce",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Cucumber Slices",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Fresh Orange",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Fresh Spinach",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Gala Apple",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Honeydew",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Mandarin Oranges",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Plain Greek Yogurt",
+          "tags": [
+            "Milk",
+            "Veggie"
+          ]
+        },
+        {
+          "name": "Raw Broccoli Florets",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Shredded Carrots",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Shredded Cheddar Cheese",
+          "tags": [
+            "Milk",
+            "Veggie"
+          ]
+        },
+        {
+          "name": "Sliced Green Pepper",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Sliced Red Onion",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Tofu",
+          "tags": [
+            "Soy",
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Tuna",
+          "tags": [
+            "Fish",
+            "Soy"
+          ]
+        },
+        {
+          "name": "Vanilla Yogurt",
+          "tags": [
+            "Milk",
+            "Veggie"
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "JCL Soup & Bread": [
+      [
+        {
+          "name": "Corn & Crawfish Chowder",
+          "tags": [
+            "Milk",
+            "Shellfish",
+            "Wheat"
+          ]
+        },
+        {
+          "name": "Dinner Roll",
+          "tags": [
+            "Wheat",
+            "Soy",
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Mexican Squash Soup",
+          "tags": [
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Whipped Butter",
+          "tags": [
+            "Milk",
+            "Veggie"
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "JCL Dessert": [
+      [
+        {
+          "name": "Strawberry Crisp Bar",
+          "tags": [
+            "Wheat",
+            "Soy",
+            "Vegan"
+          ]
+        },
+        {
+          "name": "Sugar Cookie Sandwich",
+          "tags": [
+            "Milk",
+            "Eggs",
+            "Wheat",
+            "Soy",
+            "Pork"
+          ]
+        }
+      ]
+    ]
+  }
+]
