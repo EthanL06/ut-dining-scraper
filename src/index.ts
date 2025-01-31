@@ -1,6 +1,8 @@
-import puppeteer, { Page } from "puppeteer";
+import puppeteer, { Browser, Page } from "puppeteer";
 import { writeFile } from "fs/promises";
 import { join } from "path";
+import pLimit from "p-limit";
+import { mkdirSync, existsSync } from "fs";
 
 interface Section {
   sectionName: string;
@@ -13,137 +15,192 @@ interface Food {
   allergens: string[];
 }
 
-const URL = "https://hf-foodpro.austin.utexas.edu/foodpro/location.aspx";
+const BASE_URL = "https://hf-foodpro.austin.utexas.edu/foodpro/location.aspx";
+const HEADLESS = false;
+const DATA_DIR = join(__dirname, "..", "data");
 
-const scrapeMenus = async (url: string, page: Page) => {
-  const locationName = url.split("locationName=")[1].split("&")[0];
-  await page.goto(url, { waitUntil: "networkidle2", timeout: 60 * 1000 });
+// Pre-create data directory
+if (!existsSync(DATA_DIR)) {
+  mkdirSync(DATA_DIR, { recursive: true });
+}
 
-  // Get all the a tags and filter the ones with the src that includes "longmenu.aspx"
-  const a = await page.evaluate(() => {
-    const aTags = Array.from(document.querySelectorAll("a"));
-    return aTags
-      .filter((a) => a.href.includes("longmenu.aspx"))
-      .map((a) => a.href);
+const configurePage = async (page: Page) => {
+  await page.setRequestInterception(true);
+  page.on("request", (req) => {
+    ["image", "stylesheet", "font", "media"].includes(req.resourceType())
+      ? req.abort()
+      : req.continue();
   });
+  return page;
+};
 
-  // Menus include breakfast, lunch, and dinner
-  const menus = [];
-
-  for (const link of a) {
-    await page.goto(link, { waitUntil: "networkidle2", timeout: 60 * 1000 });
-
-    // Breakfast, lunch, or dinner category
-    const category = await page.evaluate(() => {
-      const div = document.querySelector("a:has(div.longmenugridheader)");
-      const text = div?.textContent?.trim() || "";
-      return text
-        .split("Menu")[0]
-        .replace(/&nbsp;/g, "")
-        .trim(); // Returns "Breakfast", "Lunch", or "Dinner"
+const scrapeMenuData = async (browser: Browser, url: string) => {
+  const page = await configurePage(await browser.newPage());
+  try {
+    const navigationResult = await page.goto(url, {
+      waitUntil: "domcontentloaded",
+      timeout: 15000,
     });
 
-    const menu = await page.evaluate(() => {
-      const categories: Section[] = [];
-      const categoryMap = new Map<string, Section>();
-      const rows = document.querySelectorAll("tbody tr");
+    // Validate successful navigation
+    if (!navigationResult?.ok()) {
+      console.warn(`Failed to load ${url}: HTTP ${navigationResult?.status()}`);
+      return;
+    }
 
-      let currentCategory: Section | null = null;
-      const sectionNameRegex = /^--\s*|\s*--$/g;
-      const allergenAltRegex = / Icon$/;
+    const menuLinks = await page.$$eval('a[href*="longmenu.aspx"]', (anchors) =>
+      anchors.map((a) => a.href)
+    );
 
-      for (const row of rows) {
-        const categoryHeader = row.querySelector(
-          ".longmenucolmenucat"
-        ) as HTMLElement;
-        const foodLink = row.querySelector(
-          ".longmenucoldispname a"
-        ) as HTMLAnchorElement;
+    // Handle empty menu case
+    if (menuLinks.length === 0) {
+      console.warn(`No menu links found for ${url}`);
+      return;
+    }
 
-        if (categoryHeader) {
-          const sectionName = categoryHeader
-            .textContent!.trim()
-            .replace(sectionNameRegex, "")
-            .trim();
+    const menuLimit = pLimit(3);
+    const menus = await Promise.all(
+      menuLinks.map((link) =>
+        menuLimit(async () => {
+          const menuPage = await configurePage(await browser.newPage());
+          try {
+            const menuNav = await menuPage.goto(link, {
+              waitUntil: "domcontentloaded",
+              timeout: 15000,
+            });
 
-          currentCategory = categoryMap.get(sectionName) || null;
+            if (!menuNav?.ok()) {
+              console.warn(`Failed to load menu ${link}`);
+              return null;
+            }
 
-          if (!currentCategory) {
-            currentCategory = {
-              sectionName,
-              foods: [],
-            };
-            categoryMap.set(sectionName, currentCategory);
-            categories.push(currentCategory);
+            // Validate page structure
+            const hasContent = await menuPage
+              .waitForSelector(".longmenugridheader", {
+                timeout: 500, // Change this value as needed
+              })
+              .then(() => true)
+              .catch(() => false);
+
+            if (!hasContent) {
+              console.warn(`No menu content found in ${link}`);
+              return null;
+            }
+
+            const [category, menu] = await Promise.all([
+              menuPage
+                .$eval(
+                  "a:has(div.longmenugridheader)",
+                  (div) =>
+                    div.textContent
+                      ?.split("Menu")[0]
+                      .replace(/&nbsp;/g, "")
+                      .trim() || "Unknown"
+                )
+                .catch(() => "Unknown"),
+              menuPage.evaluate(parseMenuStructure).catch(() => []),
+            ]);
+
+            return menu.length > 0 ? { type: category, menu } : null;
+          } finally {
+            await menuPage.close();
           }
-        } else if (foodLink && currentCategory) {
-          const foodName = foodLink.textContent!.trim();
+        })
+      )
+    );
 
-          if (!currentCategory.foods.some((food) => food.name === foodName)) {
-            const allergens = row.querySelectorAll("img");
-            currentCategory.foods.push({
+    // Filter out invalid menus
+    const validMenus = menus.flat().filter(Boolean);
+
+    if (validMenus.length === 0) {
+      console.warn(`No valid menus found for ${url}`);
+      return;
+    }
+
+    const locationName = new URL(url).searchParams.get("locationName");
+    if (!locationName) {
+      console.warn(`Missing location name in URL: ${url}`);
+      return;
+    }
+
+    await writeFile(
+      join(DATA_DIR, `${locationName}.json`),
+      JSON.stringify(validMenus, null, 2)
+    );
+  } catch (error) {
+    console.error(`Error processing ${url}:`, error);
+  } finally {
+    await page.close();
+  }
+};
+
+const parseMenuStructure = (): Section[] => {
+  try {
+    const sectionMap = new Map<string, Section>();
+    let currentSection: Section | null = null;
+
+    document.querySelectorAll("tbody tr").forEach((row) => {
+      const categoryHeader = row.querySelector(".longmenucolmenucat");
+      if (categoryHeader) {
+        const sectionName =
+          categoryHeader.textContent?.replace(/^--|--$/g, "").trim() ||
+          "Uncategorized";
+        currentSection = { sectionName, foods: [] };
+        sectionMap.set(sectionName, currentSection);
+      } else if (currentSection) {
+        const foodLink = row.querySelector(".longmenucoldispname a");
+        if (foodLink) {
+          const existingFoods = new Set(
+            currentSection.foods.map((f) => f.name)
+          );
+          const foodName = foodLink.textContent?.trim() || "";
+
+          if (foodName && !existingFoods.has(foodName)) {
+            currentSection.foods.push({
               name: foodName,
-              link: foodLink.href,
-              allergens: Array.from(allergens, (img) =>
-                (img as HTMLImageElement).alt
-                  .replace(allergenAltRegex, "")
-                  .trim()
+              link: (foodLink as HTMLAnchorElement).href,
+              allergens: Array.from(row.querySelectorAll("img"), (img) =>
+                (img as HTMLImageElement).alt.replace(/ Icon$/, "").trim()
               ),
             });
           }
         }
       }
-
-      return categories;
     });
 
-    menus.push({
-      type: category,
-      menu,
-    });
+    return Array.from(sectionMap.values()).filter(
+      (section) => section.foods.length > 0
+    );
+  } catch (error) {
+    console.error("Error parsing menu structure:", error);
+    return [];
   }
-
-  // Output the data to a JSON file
-  await writeFile(
-    join(__dirname, "..", "data", `${locationName}.json`),
-    JSON.stringify(menus, null, 2)
-  );
-};
-
-const scrapeMenuUrls = async (page: Page) => {
-  // Grab all the a tags that includes "shortmenu.aspx" in the href
-  return await page.evaluate(() => {
-    const aTags = Array.from(document.querySelectorAll("a"));
-    return aTags
-      .filter((a) => a.href.includes("shortmenu.aspx"))
-      .map((a) => a.href);
-  });
 };
 
 (async () => {
   const browser = await puppeteer.launch({
-    headless: false,
-    defaultViewport: {
-      width: 1280,
-      height: 800,
-    },
-    executablePath:
-      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    headless: HEADLESS,
+    defaultViewport: null,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
-  const page = await browser.newPage();
 
-  await page.goto(URL, { waitUntil: "networkidle2", timeout: 60 * 1000 });
+  try {
+    const initialPage = await configurePage(await browser.newPage());
+    const menuUrls = await initialPage
+      .goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 15000 })
+      .then(() =>
+        initialPage.$$eval('a[href*="shortmenu.aspx"]', (anchors) =>
+          anchors.map((a) => a.href)
+        )
+      );
+    await initialPage.close();
 
-  const urls = await scrapeMenuUrls(page);
-
-  for (const url of urls) {
-    try {
-      await scrapeMenus(url, page);
-    } catch (error) {
-      console.error(error);
-    }
+    const scraperLimit = pLimit(7); // Main concurrency control
+    await Promise.all(
+      menuUrls.map((url) => scraperLimit(() => scrapeMenuData(browser, url)))
+    );
+  } finally {
+    await browser.close();
   }
-
-  console.log("Done scraping menus!");
-  await browser.close();
+  console.log("All menus scraped successfully!");
 })();
