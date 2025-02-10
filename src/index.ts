@@ -55,8 +55,8 @@ interface Nutrition {
 const BASE_URL = "https://hf-foodpro.austin.utexas.edu/foodpro/location.aspx";
 const HEADLESS = true;
 const DATA_DIR = join(__dirname, "..", "data");
-const NUTRITION_CONCURRENCY = 3; // Lower to avoid overwhelming nutrition pages
-const MENU_CONCURRENCY = 3; // Main concurrency control
+const NUTRITION_CONCURRENCY = 1; // Lower to avoid overwhelming nutrition pages
+const MENU_CONCURRENCY = 1; // Main concurrency control
 
 if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });
