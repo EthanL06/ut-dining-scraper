@@ -7,31 +7,6 @@ export type Json =
   | Json[];
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never;
-    };
-    Views: {
-      [_ in never]: never;
-    };
-    Functions: {
-      graphql: {
-        Args: {
-          operationName?: string;
-          query?: string;
-          variables?: Json;
-          extensions?: Json;
-        };
-        Returns: Json;
-      };
-    };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
   public: {
     Tables: {
       allergens: {
@@ -47,7 +22,6 @@ export type Database = {
           pork: boolean | null;
           sesame_seeds: boolean | null;
           shellfish: boolean | null;
-          sodium: boolean | null;
           soy: boolean | null;
           tree_nuts: boolean | null;
           vegan: boolean | null;
@@ -66,7 +40,6 @@ export type Database = {
           pork?: boolean | null;
           sesame_seeds?: boolean | null;
           shellfish?: boolean | null;
-          sodium?: boolean | null;
           soy?: boolean | null;
           tree_nuts?: boolean | null;
           vegan?: boolean | null;
@@ -85,7 +58,6 @@ export type Database = {
           pork?: boolean | null;
           sesame_seeds?: boolean | null;
           shellfish?: boolean | null;
-          sodium?: boolean | null;
           soy?: boolean | null;
           tree_nuts?: boolean | null;
           vegan?: boolean | null;
@@ -238,6 +210,7 @@ export type Database = {
           total_carbohydrates: string | null;
           total_fat: string | null;
           total_sugars: string | null;
+          trans_fat: string | null;
           vitamin_d: string | null;
         };
         Insert: {
@@ -256,6 +229,7 @@ export type Database = {
           total_carbohydrates?: string | null;
           total_fat?: string | null;
           total_sugars?: string | null;
+          trans_fat?: string | null;
           vitamin_d?: string | null;
         };
         Update: {
@@ -274,6 +248,7 @@ export type Database = {
           total_carbohydrates?: string | null;
           total_fat?: string | null;
           total_sugars?: string | null;
+          trans_fat?: string | null;
           vitamin_d?: string | null;
         };
         Relationships: [

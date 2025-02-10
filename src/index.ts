@@ -41,7 +41,6 @@ interface Nutrition {
   saturatedFat: string;
   transFat: string;
   cholesterol: string;
-  sodium: string;
   totalCarbohydrates: string;
   dietaryFiber: string;
   totalSugars: string;
@@ -254,7 +253,6 @@ const parseMenuStructure = (): Section[] => {
               ["milk", false],
               ["peanuts", false],
               ["pork", false],
-              ["sodium", false],
               ["shellfish", false],
               ["soy", false],
               ["tree_nuts", false],
