@@ -55,7 +55,8 @@ interface Nutrition {
 const BASE_URL = "https://hf-foodpro.austin.utexas.edu/foodpro/location.aspx";
 const HEADLESS = true;
 const DATA_DIR = join(__dirname, "..", "data");
-const NUTRITION_CONCURRENCY = 10; // Lower to avoid overwhelming nutrition pages
+const NUTRITION_CONCURRENCY = 3; // Lower to avoid overwhelming nutrition pages
+const MENU_CONCURRENCY = 3; // Main concurrency control
 
 if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });
@@ -326,7 +327,7 @@ const parseMenuStructure = (): Section[] => {
       );
     await initialPage.close();
 
-    const scraperLimit = pLimit(7); // Main concurrency control
+    const scraperLimit = pLimit(MENU_CONCURRENCY); // Main concurrency control
     const rawData = await Promise.all(
       menuUrls.map((url) => scraperLimit(() => scrapeMenuData(browser, url)))
     );
@@ -351,13 +352,6 @@ const parseMenuStructure = (): Section[] => {
     } else {
       console.log("Data inserted successfully:", supabaseData);
     }
-
-    // console.log(JSON.stringify(data, null, 2));
-    // // output the data to a file
-    // await writeFile(
-    //   join(DATA_DIR, "menu-data.json"),
-    //   JSON.stringify(data, null, 2)
-    // );
   } finally {
     await browser.close();
   }
