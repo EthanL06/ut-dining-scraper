@@ -36,6 +36,7 @@ interface Food {
 }
 
 interface Nutrition {
+  servingSize: string;
   calories: number;
   totalFat: string;
   saturatedFat: string;
@@ -55,8 +56,8 @@ interface Nutrition {
 const BASE_URL = "https://hf-foodpro.austin.utexas.edu/foodpro/location.aspx";
 const HEADLESS = true;
 const DATA_DIR = join(__dirname, "..", "data");
-const NUTRITION_CONCURRENCY = 1; // Lower to avoid overwhelming nutrition pages
-const MENU_CONCURRENCY = 1; // Main concurrency control
+const NUTRITION_CONCURRENCY = 10; // Lower to avoid overwhelming nutrition pages
+const MENU_CONCURRENCY = 7; // Main concurrency control
 
 if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });
@@ -100,6 +101,11 @@ const scrapeNutritionInfo = async (
         return match ? `${match[1]}${match[2]}` : null;
       };
 
+      const servingSize =
+        document
+          .querySelectorAll(".nutfactsservsize")[1]
+          ?.textContent?.trim() || "";
+
       // Extract calories from the special calories cell
       const calories =
         document.querySelector(".nutfactscaloriesval")?.textContent?.trim() ||
@@ -110,6 +116,7 @@ const scrapeNutritionInfo = async (
         ?.textContent?.trim();
 
       return {
+        servingSize,
         calories: parseFloat(calories),
         totalFat: getNutrient("Total Fat") || "0g",
         saturatedFat: getNutrient("Saturated Fat") || "0g",
@@ -166,7 +173,7 @@ const scrapeMenuData = async (browser: Browser, url: string) => {
                   (div) =>
                     div.textContent
                       ?.split("Menu")[0]
-                      .replace(/&nbsp;/g, "")
+                      .replace(/ /g, "")
                       .trim() || ""
                 )
                 .catch(() => "Unknown"),
@@ -183,18 +190,37 @@ const scrapeMenuData = async (browser: Browser, url: string) => {
                   const nutrition = await nutritionLimit(() =>
                     scrapeNutritionInfo(browser, food.link)
                   );
+
                   return { ...food, nutrition };
                 })
               )
             );
 
-            // Rebuild menu structure with nutrition data
-            const enhancedMenu = baseMenu.map((section) => ({
-              ...section,
-              foods: foodsWithNutrition
-                .filter((f) => section.foods.some((sf) => sf.name === f.name))
-                .map((f) => ({ ...f })),
-            }));
+            // Rebuild menu structure with nutrition data and remove duplicate items
+            const enhancedMenu = baseMenu.map((section) => {
+              const seenFoodNames = new Set();
+              const uniqueFoods = section.foods
+                .map((food) => {
+                  const foodWithNutrition = foodsWithNutrition.find(
+                    (f) =>
+                      section.foods.some((sf) => sf.name === f.name) &&
+                      f.name === food.name
+                  );
+                  return foodWithNutrition || food; // Use original food if nutrition not found (shouldn't happen normally after previous Promise.all, but for safety)
+                })
+                .filter((food) => {
+                  if (seenFoodNames.has(food.name)) {
+                    return false; // Skip duplicate
+                  }
+                  seenFoodNames.add(food.name);
+                  return true; // Keep unique item
+                });
+
+              return {
+                ...section,
+                foods: uniqueFoods.map((f) => ({ ...f })), // map again to ensure immutability if needed elsewhere
+              };
+            });
 
             return { type: category, menuCategories: enhancedMenu };
           } catch (error) {
@@ -230,6 +256,7 @@ const parseMenuStructure = (): Section[] => {
 
     document.querySelectorAll("tbody tr").forEach((row) => {
       const categoryHeader = row.querySelector(".longmenucolmenucat");
+      //Get the category Name
       if (categoryHeader) {
         const categoryName =
           categoryHeader.textContent?.replace(/^--\s*|[\s-]*$/g, "").trim() ||
@@ -241,58 +268,84 @@ const parseMenuStructure = (): Section[] => {
         };
         sectionMap.set(categoryName, currentSection);
       } else if (currentSection) {
+        //If it is not a category header AND it's within a category
         const foodLink = row.querySelector(".longmenucoldispname a");
-        if (foodLink) {
+        const foodCheckBox = row.querySelector(
+          ".longmenucoldispname input[type='checkbox']"
+        );
+
+        // If a food link and checkbox are present, process the food item
+        if (foodLink && foodCheckBox) {
           const foodName = foodLink.textContent?.trim() || "";
-          if (foodName) {
-            // Process allergens
-            const allergenIcons = Array.from(row.querySelectorAll("img"));
-            const allergenMap = new Map<string, boolean>([
-              ["beef", false],
-              ["egg", false],
-              ["fish", false],
-              ["milk", false],
-              ["peanuts", false],
-              ["pork", false],
-              ["shellfish", false],
-              ["soy", false],
-              ["tree_nuts", false],
-              ["wheat", false],
-              ["sesame_seeds", false],
-              ["vegan", false],
-              ["vegetarian", false],
-              ["halal", false],
-            ]);
 
-            allergenIcons.forEach((img) => {
-              const altText = (img as HTMLImageElement).alt;
-              const allergenKey = altText
-                .replace(/ Icon$/, "")
-                .trim()
-                .toLowerCase()
-                .replace(/ /g, "_") as keyof AllergenInfo;
+          // Initialize allergens
+          const allergenMap = new Map<string, boolean>([
+            ["beef", false],
+            ["egg", false],
+            ["fish", false],
+            ["milk", false],
+            ["peanuts", false],
+            ["pork", false],
+            ["shellfish", false],
+            ["soy", false],
+            ["tree_nuts", false],
+            ["wheat", false],
+            ["sesame_seeds", false],
+            ["vegan", false],
+            ["vegetarian", false],
+            ["halal", false], // Add halal if you have icons for it
+          ]);
 
-              if (allergenMap.has(allergenKey)) {
-                allergenMap.set(allergenKey, true);
-              }
-            });
+          // Collect all allergen icons
+          const allergenIcons = Array.from(row.querySelectorAll("img"));
+          allergenIcons.forEach((img) => {
+            const imgSrc = (img as HTMLImageElement).src;
 
-            const allergens = Object.fromEntries(
-              allergenMap
-            ) as unknown as AllergenInfo;
+            // Extract filename from src and normalize it. File names are usually in the format "LegendImages/<allergen_name>.png"
+            const filename = imgSrc
+              .substring(imgSrc.lastIndexOf("/") + 1)
+              .replace(".png", "")
+              .toLowerCase()
+              .replace(/ /g, "_");
 
-            // Check for existing food item
-            const existingIndex = currentSection.foods.findIndex(
-              (f) => f.name === foodName
-            );
+            // Map image filenames to allergen keys
+            const allergenKeyMap: { [key: string]: keyof AllergenInfo } = {
+              beef: "beef",
+              eggs: "egg",
+              egg: "egg",
+              fish: "fish",
+              milk: "milk",
+              peanuts: "peanuts",
+              pork: "pork",
+              shellfish: "shellfish",
+              soy: "soy",
+              tree_nuts: "tree_nuts",
+              wheat: "wheat",
+              sesame: "sesame_seeds",
+              vegan: "vegan",
+              veggie: "vegetarian",
+            };
 
-            if (existingIndex === -1) {
-              currentSection.foods.push({
-                name: foodName,
-                link: (foodLink as HTMLAnchorElement).href,
-                allergens,
-              });
+            const allergenKey = allergenKeyMap[filename];
+            if (allergenKey && allergenMap.has(allergenKey)) {
+              allergenMap.set(allergenKey, true);
             }
+          });
+
+          const allergens = Object.fromEntries(
+            allergenMap
+          ) as unknown as AllergenInfo;
+
+          const existingIndex = currentSection.foods.findIndex(
+            (f) => f.name === foodName
+          );
+          // Add new food item
+          if (existingIndex === -1) {
+            currentSection.foods.push({
+              name: foodName,
+              link: (foodLink as HTMLAnchorElement).href,
+              allergens,
+            });
           }
         }
       }
