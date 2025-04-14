@@ -54,6 +54,9 @@ interface Nutrition {
 }
 
 const BASE_URL = "https://hf-foodpro.austin.utexas.edu/foodpro/location.aspx";
+const EXTRA_LINKS = [
+  "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=19&locationName=Littlefield+Patio+Cafe&naFlag=1",
+]; // not included in the main menu page
 const HEADLESS = true;
 const DATA_DIR = join(__dirname, "..", "data");
 const NUTRITION_CONCURRENCY = 1; // Lower to avoid overwhelming nutrition pages
@@ -380,9 +383,14 @@ const parseMenuStructure = (): Section[] => {
       );
     await initialPage.close();
 
+    const menuUrlsSet = new Set<string>(menuUrls); // Use a Set to avoid duplicates
+    EXTRA_LINKS.forEach((link) => menuUrlsSet.add(link)); // Add extra links
+
     const scraperLimit = pLimit(MENU_CONCURRENCY); // Main concurrency control
     const rawData = await Promise.all(
-      menuUrls.map((url) => scraperLimit(() => scrapeMenuData(browser, url)))
+      Array.from(menuUrlsSet).map((url) =>
+        scraperLimit(() => scrapeMenuData(browser, url))
+      )
     );
 
     console.log("Scraping complete.");
