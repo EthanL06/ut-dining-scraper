@@ -1,4 +1,4 @@
-import puppeteer, { Browser, Page } from "puppeteer";
+import * as cheerio from "cheerio";
 import { writeFile } from "fs/promises";
 import { join } from "path";
 import pLimit from "p-limit";
@@ -12,7 +12,6 @@ interface AllergenInfo {
   milk: boolean;
   peanuts: boolean;
   pork: boolean;
-  sodium: boolean;
   shellfish: boolean;
   soy: boolean;
   tree_nuts: boolean;
@@ -50,220 +49,136 @@ interface Nutrition {
   calcium: string;
   iron: string;
   potassium: string;
+  sodium: string;
   ingredients?: string;
 }
 
-const BASE_URL = "https://hf-foodpro.austin.utexas.edu/foodpro/location.aspx";
-const EXTRA_LINKS = [
+const LINKS = [
+  "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12&locationName=J2+Dining&naFlag=1",
+  "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12(a)&locationName=JCL+Dining&naFlag=1",
+  "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=03&locationName=Kins+Dining&naFlag=1",
+  "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=05&locationName=Jester+City+Market&naFlag=1",
+  "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=26&locationName=Jesta'+Pizza&naFlag=1",
   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=19&locationName=Littlefield+Patio+Cafe&naFlag=1",
-]; // not included in the main menu page
-const HEADLESS = true;
+  "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=08&locationName=Cypress+Bend+Cafe+&naFlag=1",
+];
+
 const DATA_DIR = join(__dirname, "..", "data");
-const NUTRITION_CONCURRENCY = 1; // Lower to avoid overwhelming nutrition pages
-const MENU_CONCURRENCY = 1; // Main concurrency control
+const NUTRITION_CONCURRENCY = 50;
+const MENU_CONCURRENCY = 7;
+const ENABLE_SUPABASE = false;
 
 if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });
 }
 
-const configurePage = async (page: Page) => {
-  await page.setRequestInterception(true);
-  page.on("request", (req) => {
-    ["image", "stylesheet", "font", "media"].includes(req.resourceType())
-      ? req.abort()
-      : req.continue();
-  });
-  return page;
-};
+// Fetch HTML content with error handling and retries
+const fetchHtml = async (url: string, retries = 3): Promise<string | null> => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        },
+        signal: AbortSignal.timeout(15000), // 15 second timeout
+      });
 
-const scrapeNutritionInfo = async (
-  browser: Browser,
-  url: string
-): Promise<Nutrition | null> => {
-  const page = await configurePage(await browser.newPage());
-  try {
-    const response = await page.goto(url, {
-      waitUntil: "domcontentloaded",
-      timeout: 10000,
-    });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
 
-    if (!response?.ok()) return null;
-
-    return await page.evaluate(() => {
-      const getNutrient = (label: string) => {
-        // Search through all nutrient elements
-        const elements = Array.from(
-          document.querySelectorAll(".nutfactstopnutrient")
+      return await response.text();
+    } catch (error) {
+      if (i === 0) {
+        console.error(
+          `❌ Failed to fetch ${
+            new URL(url).searchParams.get("locationName") || "page"
+          }: ${error instanceof Error ? error.message : error}`
         );
-        const element = elements.find((el) => el.textContent?.includes(label));
-
-        if (!element) return null;
-
-        // Extract numeric value with unit
-        const match = element.textContent?.match(/([\d.]+)\s*([a-zA-Zμ]+)/);
-        return match ? `${match[1]}${match[2]}` : null;
-      };
-
-      const servingSize =
-        document
-          .querySelectorAll(".nutfactsservsize")[1]
-          ?.textContent?.trim() || "";
-
-      // Extract calories from the special calories cell
-      const calories =
-        document.querySelector(".nutfactscaloriesval")?.textContent?.trim() ||
-        "0";
-
-      const ingredients = document
-        .querySelector(".labelingredientsvalue")
-        ?.textContent?.trim();
-
-      return {
-        servingSize,
-        calories: parseFloat(calories),
-        totalFat: getNutrient("Total Fat") || "0g",
-        saturatedFat: getNutrient("Saturated Fat") || "0g",
-        transFat: getNutrient("Trans Fat") || "0g",
-        cholesterol: getNutrient("Cholesterol") || "0mg",
-        sodium: getNutrient("Sodium") || "0mg",
-        totalCarbohydrates: getNutrient("Total Carbohydrate") || "0g",
-        dietaryFiber: getNutrient("Dietary Fiber") || "0g",
-        totalSugars: getNutrient("Total Sugars") || "0g",
-        protein: getNutrient("Protein") || "0g",
-        vitaminD: getNutrient("Vitamin D") || "0mcg",
-        calcium: getNutrient("Calcium") || "0mg",
-        iron: getNutrient("Iron") || "0mg",
-        potassium: getNutrient("Potassium") || "0mg",
-        ingredients,
-      };
-    });
-  } catch (error) {
-    console.error(`Nutrition scrape failed for ${url}:`, error);
-    return null;
-  } finally {
-    await page.close();
+      }
+      if (i === retries - 1) return null;
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
+    }
   }
+  return null;
 };
 
-const scrapeMenuData = async (browser: Browser, url: string) => {
-  const page = await configurePage(await browser.newPage());
+const scrapeNutritionInfo = async (url: string): Promise<Nutrition | null> => {
   try {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+    const html = await fetchHtml(url);
+    if (!html) return null;
 
-    const menuLinks = await page.$$eval('a[href*="longmenu.aspx"]', (anchors) =>
-      anchors.map((a) => a.href)
-    );
+    const $ = cheerio.load(html);
 
-    const menuLimit = pLimit(3);
-    const menus = await Promise.all(
-      menuLinks.map((link) =>
-        menuLimit(async () => {
-          const menuPage = await configurePage(await browser.newPage());
-          try {
-            await menuPage.goto(link, {
-              waitUntil: "domcontentloaded",
-              timeout: 15000,
-            });
+    const getNutrient = (label: string) => {
+      const elements = $(".nutfactstopnutrient");
+      let result = null;
 
-            await menuPage.waitForSelector(".longmenugridheader", {
-              timeout: 10000,
-            });
-
-            const [category, baseMenu] = await Promise.all([
-              menuPage
-                .$eval(
-                  "a:has(div.longmenugridheader)",
-                  (div) =>
-                    div.textContent
-                      ?.split("Menu")[0]
-                      .replace(/ /g, "")
-                      .trim() || ""
-                )
-                .catch(() => "Unknown"),
-              menuPage.evaluate(parseMenuStructure),
-            ]);
-
-            // Scrape nutrition info for all foods in parallel
-            const nutritionLimit = pLimit(NUTRITION_CONCURRENCY);
-            const foodsWithNutrition = await Promise.all(
-              baseMenu.flatMap((section) =>
-                section.foods.map(async (food) => {
-                  if (!food.link) return food;
-
-                  const nutrition = await nutritionLimit(() =>
-                    scrapeNutritionInfo(browser, food.link)
-                  );
-
-                  return { ...food, nutrition };
-                })
-              )
-            );
-
-            // Rebuild menu structure with nutrition data and remove duplicate items
-            const enhancedMenu = baseMenu.map((section) => {
-              const seenFoodNames = new Set();
-              const uniqueFoods = section.foods
-                .map((food) => {
-                  const foodWithNutrition = foodsWithNutrition.find(
-                    (f) =>
-                      section.foods.some((sf) => sf.name === f.name) &&
-                      f.name === food.name
-                  );
-                  return foodWithNutrition || food; // Use original food if nutrition not found (shouldn't happen normally after previous Promise.all, but for safety)
-                })
-                .filter((food) => {
-                  if (seenFoodNames.has(food.name)) {
-                    return false; // Skip duplicate
-                  }
-                  seenFoodNames.add(food.name);
-                  return true; // Keep unique item
-                });
-
-              return {
-                ...section,
-                foods: uniqueFoods.map((f) => ({ ...f })), // map again to ensure immutability if needed elsewhere
-              };
-            });
-
-            return { type: category, menuCategories: enhancedMenu };
-          } catch (error) {
-            console.error(`Error processing menu: ${link}`);
-            return null;
-          } finally {
-            await menuPage.close();
+      elements.each((_, element) => {
+        const text = $(element).text();
+        if (text.includes(label)) {
+          const match = text.match(/([\d.]+)\s*([a-zA-Zμ]+)/);
+          if (match) {
+            result = `${match[1]}${match[2]}`;
+            return false; // Break the loop
           }
-        })
-      )
-    );
+        }
+      });
 
-    const locationName = new URL(url).searchParams.get("locationName")!.trim();
-    const filteredMenus = menus.filter((m) => m !== null);
+      return result;
+    };
 
-    await page.close();
+    const servingSizeElements = $(".nutfactsservsize");
+    const servingSize =
+      servingSizeElements.length > 1
+        ? $(servingSizeElements[1]).text().trim()
+        : "";
+
+    const caloriesText = $(".nutfactscaloriesval").text().trim();
+    const calories = parseFloat(caloriesText) || 0;
+
+    const ingredients = $(".labelingredientsvalue").text().trim() || undefined;
 
     return {
-      locationName,
-      menus: filteredMenus,
+      servingSize,
+      calories,
+      totalFat: getNutrient("Total Fat") || "0g",
+      saturatedFat: getNutrient("Saturated Fat") || "0g",
+      transFat: getNutrient("Trans Fat") || "0g",
+      cholesterol: getNutrient("Cholesterol") || "0mg",
+      sodium: getNutrient("Sodium") || "0mg",
+      totalCarbohydrates: getNutrient("Total Carbohydrate") || "0g",
+      dietaryFiber: getNutrient("Dietary Fiber") || "0g",
+      totalSugars: getNutrient("Total Sugars") || "0g",
+      protein: getNutrient("Protein") || "0g",
+      vitaminD: getNutrient("Vitamin D") || "0mcg",
+      calcium: getNutrient("Calcium") || "0mg",
+      iron: getNutrient("Iron") || "0mg",
+      potassium: getNutrient("Potassium") || "0mg",
+      ingredients,
     };
   } catch (error) {
-    console.error(`Error processing ${url}:`, error);
-    await page.close();
+    console.error(`🍔 Failed to scrape nutrition for food item:`, error);
     return null;
   }
 };
 
-const parseMenuStructure = (): Section[] => {
+const parseMenuStructure = ($: cheerio.CheerioAPI): Section[] => {
   try {
     const sectionMap = new Map<string, Section>();
     let currentSection: Section | null = null;
 
-    document.querySelectorAll("tbody tr").forEach((row) => {
-      const categoryHeader = row.querySelector(".longmenucolmenucat");
-      //Get the category Name
-      if (categoryHeader) {
+    $("tbody tr").each((_, row) => {
+      const $row = $(row);
+      const categoryHeader = $row.find(".longmenucolmenucat");
+
+      if (categoryHeader.length > 0) {
         const categoryName =
-          categoryHeader.textContent?.replace(/^--\s*|[\s-]*$/g, "").trim() ||
-          "Uncategorized";
+          categoryHeader
+            .text()
+            .replace(/^--\s*|[\s-]*$/g, "")
+            .trim() || "Uncategorized";
 
         currentSection = sectionMap.get(categoryName) || {
           categoryName,
@@ -271,15 +186,14 @@ const parseMenuStructure = (): Section[] => {
         };
         sectionMap.set(categoryName, currentSection);
       } else if (currentSection) {
-        //If it is not a category header AND it's within a category
-        const foodLink = row.querySelector(".longmenucoldispname a");
-        const foodCheckBox = row.querySelector(
-          ".longmenucoldispname input[type='checkbox']"
+        const foodLink = $row.find(".longmenucoldispname a");
+        const foodCheckBox = $row.find(
+          '.longmenucoldispname input[type="checkbox"]'
         );
 
-        // If a food link and checkbox are present, process the food item
-        if (foodLink && foodCheckBox) {
-          const foodName = foodLink.textContent?.trim() || "";
+        if (foodLink.length > 0 && foodCheckBox.length > 0) {
+          const foodName = foodLink.text().trim();
+          if (!foodName) return;
 
           // Initialize allergens
           const allergenMap = new Map<string, boolean>([
@@ -296,22 +210,21 @@ const parseMenuStructure = (): Section[] => {
             ["sesame_seeds", false],
             ["vegan", false],
             ["vegetarian", false],
-            ["halal", false], // Add halal if you have icons for it
+            ["halal", false],
           ]);
 
           // Collect all allergen icons
-          const allergenIcons = Array.from(row.querySelectorAll("img"));
-          allergenIcons.forEach((img) => {
-            const imgSrc = (img as HTMLImageElement).src;
+          const allergenIcons = $row.find("img");
+          allergenIcons.each((_, img) => {
+            const imgSrc = $(img).attr("src");
+            if (!imgSrc) return;
 
-            // Extract filename from src and normalize it. File names are usually in the format "LegendImages/<allergen_name>.png"
             const filename = imgSrc
               .substring(imgSrc.lastIndexOf("/") + 1)
               .replace(".png", "")
               .toLowerCase()
               .replace(/ /g, "_");
 
-            // Map image filenames to allergen keys
             const allergenKeyMap: { [key: string]: keyof AllergenInfo } = {
               beef: "beef",
               eggs: "egg",
@@ -342,11 +255,16 @@ const parseMenuStructure = (): Section[] => {
           const existingIndex = currentSection.foods.findIndex(
             (f) => f.name === foodName
           );
-          // Add new food item
+
           if (existingIndex === -1) {
+            const href = foodLink.attr("href");
+            const fullLink = href?.startsWith("http")
+              ? href
+              : `https://hf-foodpro.austin.utexas.edu/foodpro/${href}`;
+
             currentSection.foods.push({
               name: foodName,
-              link: (foodLink as HTMLAnchorElement).href,
+              link: fullLink,
               allergens,
             });
           }
@@ -363,57 +281,215 @@ const parseMenuStructure = (): Section[] => {
   }
 };
 
-(async () => {
-  const browser = await puppeteer.launch({
-    headless: HEADLESS,
-    defaultViewport: null,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
-
-  console.log("Starting menu scraping...");
-
+const scrapeMenuData = async (url: string) => {
   try {
-    const initialPage = await configurePage(await browser.newPage());
-    const menuUrls = await initialPage
-      .goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 15000 })
-      .then(() =>
-        initialPage.$$eval('a[href*="shortmenu.aspx"]', (anchors) =>
-          anchors.map((a) => a.href)
-        )
-      );
-    await initialPage.close();
+    const html = await fetchHtml(url);
+    if (!html) return null;
 
-    const menuUrlsSet = new Set<string>(menuUrls); // Use a Set to avoid duplicates
-    EXTRA_LINKS.forEach((link) => menuUrlsSet.add(link)); // Add extra links
+    const $ = cheerio.load(html);
 
-    const scraperLimit = pLimit(MENU_CONCURRENCY); // Main concurrency control
-    const rawData = await Promise.all(
-      Array.from(menuUrlsSet).map((url) =>
-        scraperLimit(() => scrapeMenuData(browser, url))
+    // Find menu links
+    const menuLinks: string[] = [];
+    $('a[href*="longmenu.aspx"]').each((_, element) => {
+      const href = $(element).attr("href");
+      if (href) {
+        const fullLink = href.startsWith("http")
+          ? href
+          : `https://hf-foodpro.austin.utexas.edu/foodpro/${href}`;
+        menuLinks.push(fullLink);
+      }
+    });
+
+    const urlObj = new URL(url);
+    const locationName =
+      urlObj.searchParams.get("locationName")?.trim() || "Unknown Location";
+
+    console.log(
+      `🏢 Processing ${locationName} (${menuLinks.length} menu${
+        menuLinks.length !== 1 ? "s" : ""
+      } found)`
+    );
+
+    const menuLimit = pLimit(3);
+    const menus = await Promise.all(
+      menuLinks.map((link) =>
+        menuLimit(async () => {
+          try {
+            const menuHtml = await fetchHtml(link);
+            if (!menuHtml) return null;
+
+            const menu$ = cheerio.load(menuHtml);
+
+            // Extract category name
+            const categoryElement = menu$("a:has(div.longmenugridheader)");
+            const categoryText = categoryElement.text();
+            const category =
+              categoryText.split("Menu")[0].replace(/ /g, "").trim() ||
+              "Unknown";
+
+            const baseMenu = parseMenuStructure(menu$);
+
+            // Return null if no menu categories found
+            if (baseMenu.length === 0) {
+              return null;
+            }
+
+            const totalFoods = baseMenu.reduce(
+              (sum, section) => sum + section.foods.length,
+              0
+            );
+            console.log(
+              `  📋 ${category} menu: ${totalFoods} food items across ${baseMenu.length} categories`
+            );
+
+            // Scrape nutrition info for all foods in parallel
+            const nutritionLimit = pLimit(NUTRITION_CONCURRENCY);
+            const foodsWithNutrition = await Promise.all(
+              baseMenu.flatMap((section) =>
+                section.foods.map(async (food) => {
+                  if (!food.link) return food;
+
+                  const nutrition = await nutritionLimit(() =>
+                    scrapeNutritionInfo(food.link)
+                  );
+
+                  return { ...food, nutrition };
+                })
+              )
+            );
+
+            // Rebuild menu structure with nutrition data and remove duplicates
+            const enhancedMenu = baseMenu.map((section) => {
+              const seenFoodNames = new Set();
+              const uniqueFoods = section.foods
+                .map((food) => {
+                  const foodWithNutrition = foodsWithNutrition.find(
+                    (f) => f.name === food.name
+                  );
+                  return foodWithNutrition || food;
+                })
+                .filter((food) => {
+                  if (seenFoodNames.has(food.name)) {
+                    return false;
+                  }
+                  seenFoodNames.add(food.name);
+                  return true;
+                });
+
+              return {
+                ...section,
+                foods: uniqueFoods,
+              };
+            });
+
+            // Filter out sections with no foods and return null if no sections remain
+            const finalMenu = enhancedMenu.filter(
+              (section) => section.foods.length > 0
+            );
+            if (finalMenu.length === 0) {
+              return null;
+            }
+
+            const nutritionCount = finalMenu.reduce(
+              (sum, section) =>
+                sum + section.foods.filter((food) => food.nutrition).length,
+              0
+            );
+            console.log(
+              `  ✅ ${category}: ${nutritionCount}/${totalFoods} items with nutrition data`
+            );
+
+            return { type: category, menuCategories: finalMenu };
+          } catch (error) {
+            console.error(`❌ Error processing menu: ${link}`, error);
+            return null;
+          }
+        })
       )
     );
 
-    console.log("Scraping complete.");
+    const filteredMenus = menus.filter((m) => m !== null);
 
-    const data = rawData.map(
-      (item) => item && JSON.parse(JSON.stringify(item))
+    return {
+      locationName,
+      menus: filteredMenus,
+    };
+  } catch (error) {
+    console.error(`❌ Error processing ${url}:`, error);
+    return null;
+  }
+};
+
+(async () => {
+  const startTime = Date.now();
+  console.log("🚀 Starting menu scraping with Cheerio...");
+
+  try {
+    const menuUrlsSet = new Set<string>(LINKS);
+    console.log(`📍 Found ${menuUrlsSet.size} dining locations to process`);
+
+    const scraperLimit = pLimit(MENU_CONCURRENCY);
+    const rawData = await Promise.all(
+      Array.from(menuUrlsSet).map((url) =>
+        scraperLimit(() => scrapeMenuData(url))
+      )
     );
 
-    console.log("Inserting into Supabase...");
+    console.log("🎉 Scraping complete!");
 
-    const { data: supabaseData, error } = await supabase.rpc(
-      "insert_multiple_locations_and_menus",
-      {
-        arg_data_array: data,
+    const data = rawData.filter((item) => item !== null);
+    const totalLocations = data.length;
+    const totalMenus = data.reduce(
+      (sum, location) => sum + location.menus.length,
+      0
+    );
+    const totalFoodItems = data.reduce(
+      (sum, location) =>
+        sum +
+        location.menus.reduce(
+          (menuSum, menu) =>
+            menuSum +
+            menu.menuCategories.reduce(
+              (catSum, category) => catSum + category.foods.length,
+              0
+            ),
+          0
+        ),
+      0
+    );
+
+    console.log(
+      `📊 Scraped ${totalLocations} locations, ${totalMenus} menus, ${totalFoodItems} food items`
+    );
+
+    // Generate json file
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const fileName = `ut_menus_${timestamp}.json`;
+    const filePath = join(DATA_DIR, fileName);
+    await writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
+    console.log(`💾 Data saved to ${filePath}`);
+
+    if (ENABLE_SUPABASE) {
+      console.log("☁️ Inserting into Supabase...");
+
+      const { data: supabaseData, error } = await supabase.rpc(
+        "insert_multiple_locations_and_menus",
+        {
+          arg_data_array: data as any,
+        }
+      );
+
+      if (error) {
+        console.error("❌ Error inserting data:", error);
+      } else {
+        console.log("✅ Data inserted successfully:", supabaseData);
       }
-    );
-
-    if (error) {
-      console.error("Error inserting data:", error);
-    } else {
-      console.log("Data inserted successfully:", supabaseData);
     }
-  } finally {
-    await browser.close();
+
+    const endTime = Date.now();
+    const duration = (endTime - startTime) / 1000;
+    console.log(`⏱️ Total scraping time: ${duration.toFixed(2)} seconds`);
+  } catch (error) {
+    console.error("💥 Fatal error:", error);
   }
 })();
