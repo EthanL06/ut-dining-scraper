@@ -155,6 +155,7 @@ export type Database = {
           colloquial_name: string | null
           created_at: string | null
           description: string
+          force_close: boolean
           google_maps_link: string
           id: string
           image: string | null
@@ -171,6 +172,7 @@ export type Database = {
           colloquial_name?: string | null
           created_at?: string | null
           description?: string
+          force_close?: boolean
           google_maps_link?: string
           id?: string
           image?: string | null
@@ -187,6 +189,7 @@ export type Database = {
           colloquial_name?: string | null
           created_at?: string | null
           description?: string
+          force_close?: boolean
           google_maps_link?: string
           id?: string
           image?: string | null
@@ -210,18 +213,21 @@ export type Database = {
       location_type: {
         Row: {
           created_at: string | null
+          display_order: number
           id: string
           name: string
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          display_order?: number
           id?: string
           name: string
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          display_order?: number
           id?: string
           name?: string
           updated_at?: string | null
