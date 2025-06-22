@@ -288,6 +288,13 @@ const scrapeMenuData = async (url: string) => {
 
     const $ = cheerio.load(html);
 
+    // Extract menu date
+    const menuDateElement = $("div.shortmenutitle").text();
+    const menuDateMatch = menuDateElement.match(/Menus for (.+)/);
+    const menuDate = menuDateMatch
+      ? new Date(menuDateMatch[1].trim()).toISOString().slice(0, 10)
+      : null;
+
     // Find menu links
     const menuLinks: string[] = [];
     $('a[href*="longmenu.aspx"]').each((_, element) => {
@@ -412,6 +419,7 @@ const scrapeMenuData = async (url: string) => {
 
     return {
       locationName,
+      date: menuDate,
       menus: filteredMenus,
     };
   } catch (error) {

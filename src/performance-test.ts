@@ -60,6 +60,7 @@ interface TestResult {
   successRate: number;
   itemsPerSecond: number;
   errors: number;
+  memoryUsage: number;
 }
 
 // Test configurations to try
@@ -83,6 +84,20 @@ const LINKS = [
   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=19&locationName=Littlefield+Patio+Cafe&naFlag=1",
   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=08&locationName=Cypress+Bend+Cafe+&naFlag=1",
 ];
+
+// const LINKS = [
+//   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12&locationName=J2+Dining&naFlag=1&WeeksMenus=This+Week%27s+Menus&myaction=read&dtdate=6%2f20%2f2025",
+//   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12&locationName=J2+Dining&naFlag=1&WeeksMenus=This+Week%27s+Menus&myaction=read&dtdate=6%2f21%2f2025",
+//   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12&locationName=J2+Dining&naFlag=1&WeeksMenus=This+Week%27s+Menus&myaction=read&dtdate=6%2f22%2f2025",
+//   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12&locationName=J2+Dining&naFlag=1&WeeksMenus=This+Week%27s+Menus&myaction=read&dtdate=6%2f23%2f2025",
+//   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12&locationName=J2+Dining&naFlag=1&WeeksMenus=This+Week%27s+Menus&myaction=read&dtdate=6%2f24%2f2025",
+//   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12&locationName=J2+Dining&naFlag=1&WeeksMenus=This+Week%27s+Menus&myaction=read&dtdate=6%2f25%2f2025",
+//   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12&locationName=J2+Dining&naFlag=1&WeeksMenus=This+Week%27s+Menus&myaction=read&dtdate=6%2f26%2f2025",
+//   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12&locationName=J2+Dining&naFlag=1&WeeksMenus=This+Week%27s+Menus&myaction=read&dtdate=6%2f27%2f2025",
+//   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12&locationName=J2+Dining&naFlag=1&WeeksMenus=This+Week%27s+Menus&myaction=read&dtdate=6%2f28%2f2025",
+//   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12&locationName=J2+Dining&naFlag=1&WeeksMenus=This+Week%27s+Menus&myaction=read&dtdate=6%2f29%2f2025",
+//   "https://hf-foodpro.austin.utexas.edu/foodpro/shortmenu.aspx?sName=University+Housing+and+Dining&locationNum=12&locationName=J2+Dining&naFlag=1&WeeksMenus=This+Week%27s+Menus&myaction=read&dtdate=6%2f30%2f2025",
+// ];
 
 const DATA_DIR = join(__dirname, "..", "performance-test-results");
 
@@ -420,6 +435,7 @@ const runPerformanceTest = async (
   );
 
   const startTime = Date.now();
+  const startMemory = process.memoryUsage().heapUsed;
   errorCount = 0;
 
   try {
@@ -435,7 +451,9 @@ const runPerformanceTest = async (
     );
 
     const endTime = Date.now();
+    const endMemory = process.memoryUsage().heapUsed;
     const duration = (endTime - startTime) / 1000;
+    const memoryUsage = (endMemory - startMemory) / 1024 / 1024; // Convert to MB
 
     const data = rawData.filter((item) => item !== null);
     const totalItems = data.reduce(
@@ -481,12 +499,14 @@ const runPerformanceTest = async (
       successRate,
       itemsPerSecond,
       errors: errorCount,
+      memoryUsage,
     };
 
     console.log(`   ⏱️  Duration: ${duration.toFixed(2)}s`);
     console.log(`   📊 Items: ${totalItems} (${itemsPerSecond.toFixed(1)}/s)`);
     console.log(`   ✅ Success Rate: ${successRate.toFixed(1)}%`);
     console.log(`   ❌ Errors: ${errorCount}`);
+    console.log(`   🧠 Memory Usage: ${memoryUsage.toFixed(2)} MB`);
 
     return result;
   } catch (error) {
@@ -499,6 +519,7 @@ const runPerformanceTest = async (
       successRate: 0,
       itemsPerSecond: 0,
       errors: errorCount,
+      memoryUsage: 0,
     };
   }
 };
