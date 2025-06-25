@@ -4,6 +4,8 @@ import { join } from "path";
 import pLimit from "p-limit";
 import { mkdirSync, existsSync } from "fs";
 import { supabase } from "./supabase";
+import { config as dotenvConfig } from "dotenv";
+dotenvConfig();
 
 interface AllergenInfo {
   beef: boolean;
@@ -66,7 +68,7 @@ const LINKS = [
 const DATA_DIR = join(__dirname, "..", "data");
 const NUTRITION_CONCURRENCY = 50;
 const MENU_CONCURRENCY = 7;
-const ENABLE_SUPABASE = false;
+const ENABLE_SUPABASE = process.env.ENABLE_SUPABASE === "true";
 
 if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });

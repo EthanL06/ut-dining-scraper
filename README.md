@@ -100,10 +100,10 @@ const LINKS = [
 
 ### Supabase Integration
 
-1. **Enable Supabase** by setting `ENABLE_SUPABASE` to `true` in `src/index.ts`:
+1. **Enable Supabase** by setting `ENABLE_SUPABASE` in your `.env` file:
 
-   ```typescript
-   const ENABLE_SUPABASE = true; // Set to true to enable Supabase insertion
+   ```env
+   ENABLE_SUPABASE=true # Set to true to enable Supabase insertion, or false to disable
    ```
 
 2. **Configure credentials** in `.env`:
