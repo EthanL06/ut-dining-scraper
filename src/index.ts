@@ -66,8 +66,8 @@ const LINKS = [
 ];
 
 const DATA_DIR = join(__dirname, "..", "data");
-const NUTRITION_CONCURRENCY = 50;
-const MENU_CONCURRENCY = 7;
+const NUTRITION_CONCURRENCY = process.env.NUTRITION_CONCURRENCY ? parseInt(process.env.NUTRITION_CONCURRENCY) : 50;
+const MENU_CONCURRENCY = process.env.MENU_CONCURRENCY ? parseInt(process.env.MENU_CONCURRENCY) : 7;
 const ENABLE_SUPABASE = process.env.ENABLE_SUPABASE === "true";
 
 if (!existsSync(DATA_DIR)) {
