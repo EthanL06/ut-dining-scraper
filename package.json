@@ -1,15 +1,27 @@
 {
-  "name": "ut-dining-hall-server",
+  "name": "ut-dining-scraper",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "High-performance web scraper for University of Texas at Austin dining hall menus with nutrition data and allergen information",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "watch": "pnpm tsc -w",
-    "build": "pnpm tsc",
-    "start": "npx puppeteer browsers install chrome && pnpm build && node dist/index.js"
+    "build": "tsc",
+    "start": "pnpm run build && node dist/index.js",
+    "dev": "tsc --watch",
+    "performance-test": "pnpm run build && node dist/performance-test.js",
+    "performance-test:script": "./run-performance-test.sh",
+    "clean": "rm -rf dist/",
+    "scrape": "pnpm run start",
+    "quick-start": "pnpm install && pnpm run build && pnpm run start"
   },
-  "keywords": [],
+  "keywords": [
+    "web-scraping",
+    "university-texas",
+    "dining-halls",
+    "nutrition-data",
+    "typescript",
+    "cheerio",
+    "performance-testing"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
@@ -17,8 +29,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.48.1",
+    "cheerio": "^1.1.0",
     "dotenv": "^16.4.7",
-    "p-limit": "^6.2.0",
-    "puppeteer": "^24.1.1"
+    "p-limit": "^6.2.0"
   }
 }
