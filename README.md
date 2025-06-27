@@ -281,8 +281,6 @@ pnpm clean
 pnpm quick-start
 ```
 
-📋 **For a complete commands reference, see [COMMANDS.md](COMMANDS.md)**
-
 ## 📚 Documentation
 
 - **[README.md](README.md)** - Main documentation (you are here)
