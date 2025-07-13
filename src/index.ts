@@ -84,7 +84,7 @@ if (!existsSync(DATA_DIR)) {
 // Generate date range from today to N days in the future
 const generateDateRange = (daysToScrape: number): string[] => {
   const dates: string[] = [];
-  const today = new Date(2025, 6, 9);
+  const today = new Date();
 
   for (let i = 0; i < daysToScrape; i++) {
     const date = new Date(today);
