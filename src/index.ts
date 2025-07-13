@@ -66,13 +66,95 @@ const LINKS = [
 ];
 
 const DATA_DIR = join(__dirname, "..", "data");
-const NUTRITION_CONCURRENCY = process.env.NUTRITION_CONCURRENCY ? parseInt(process.env.NUTRITION_CONCURRENCY) : 50;
-const MENU_CONCURRENCY = process.env.MENU_CONCURRENCY ? parseInt(process.env.MENU_CONCURRENCY) : 7;
+const NUTRITION_CONCURRENCY = process.env.NUTRITION_CONCURRENCY
+  ? parseInt(process.env.NUTRITION_CONCURRENCY)
+  : 50;
+const MENU_CONCURRENCY = process.env.MENU_CONCURRENCY
+  ? parseInt(process.env.MENU_CONCURRENCY)
+  : 7;
+const DAYS_TO_SCRAPE = process.env.DAYS_TO_SCRAPE
+  ? parseInt(process.env.DAYS_TO_SCRAPE)
+  : 1;
 const ENABLE_SUPABASE = process.env.ENABLE_SUPABASE === "true";
 
 if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });
 }
+
+// Generate date range from today to N days in the future
+const generateDateRange = (daysToScrape: number): string[] => {
+  const dates: string[] = [];
+  const today = new Date(2025, 6, 9);
+
+  for (let i = 0; i < daysToScrape; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+
+    // Format as M/D/YYYY (e.g., "7/20/2025")
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const year = date.getFullYear();
+    dates.push(`${month}/${day}/${year}`);
+  }
+
+  return dates;
+};
+
+// Add date parameter to URL
+const addDateToUrl = (baseUrl: string, date: string): string => {
+  // URL encode the date (7/20/2025 becomes 7%2f20%2f2025)
+  const encodedDate = date.replace(/\//g, "%2f");
+  const separator = baseUrl.includes("?") ? "&" : "?";
+  return `${baseUrl}${separator}dtdate=${encodedDate}`;
+};
+
+// Check for existing menus in Supabase to avoid duplicate scraping
+const checkExistingMenus = async (dates: string[]): Promise<Set<string>> => {
+  if (!ENABLE_SUPABASE) {
+    return new Set();
+  }
+
+  try {
+    console.log("🔍 Checking Supabase for existing menus...");
+
+    // Query menus with location names for the specified dates
+    const { data, error } = await supabase
+      .from("menu")
+      .select(
+        `
+        date,
+        location:location_id (
+          name
+        )
+      `
+      )
+      .in("date", dates);
+
+    if (error) {
+      console.error("❌ Error querying existing menus:", error);
+      return new Set();
+    }
+
+    // Create set of "locationName|date" combinations that already exist
+    const existingCombinations = new Set<string>();
+    if (data) {
+      data.forEach((menu: any) => {
+        if (menu.location?.name && menu.date) {
+          const locationName = menu.location.name.trim();
+          existingCombinations.add(`${locationName}|${menu.date}`);
+        }
+      });
+    }
+
+    console.log(
+      `📋 Found ${existingCombinations.size} existing menu(s) in database`
+    );
+    return existingCombinations;
+  } catch (error) {
+    console.error("❌ Error checking existing menus:", error);
+    return new Set();
+  }
+};
 
 // Fetch HTML content with error handling and retries
 const fetchHtml = async (url: string, retries = 3): Promise<string | null> => {
@@ -283,19 +365,27 @@ const parseMenuStructure = ($: cheerio.CheerioAPI): Section[] => {
   }
 };
 
-const scrapeMenuData = async (url: string) => {
+const scrapeMenuData = async (url: string, date?: string) => {
   try {
     const html = await fetchHtml(url);
     if (!html) return null;
 
     const $ = cheerio.load(html);
 
-    // Extract menu date
-    const menuDateElement = $("div.shortmenutitle").text();
-    const menuDateMatch = menuDateElement.match(/Menus for (.+)/);
-    const menuDate = menuDateMatch
-      ? new Date(menuDateMatch[1].trim()).toISOString().slice(0, 10)
-      : null;
+    // Use provided date parameter or extract from page
+    let menuDate: string | null = null;
+    if (date) {
+      // Convert M/D/YYYY to YYYY-MM-DD format for database consistency
+      const [month, day, year] = date.split("/");
+      menuDate = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    } else {
+      // Fallback to extracting from page (legacy behavior)
+      const menuDateElement = $("div.shortmenutitle").text();
+      const menuDateMatch = menuDateElement.match(/Menus for (.+)/);
+      menuDate = menuDateMatch
+        ? new Date(menuDateMatch[1].trim()).toISOString().slice(0, 10)
+        : null;
+    }
 
     // Find menu links
     const menuLinks: string[] = [];
@@ -435,32 +525,139 @@ const scrapeMenuData = async (url: string) => {
   console.log("🚀 Starting menu scraping with Cheerio...");
 
   try {
+    // Generate date range
+    const dates = generateDateRange(DAYS_TO_SCRAPE);
+    const startDate = dates[0];
+    const endDate = dates[dates.length - 1];
+
+    if (dates.length === 1) {
+      console.log(`📅 Scraping for date: ${startDate}`);
+    } else {
+      console.log(
+        `📅 Scraping date range: ${startDate} to ${endDate} (${dates.length} days)`
+      );
+    }
+
+    // Check for existing menus in Supabase
+    const existingMenus = await checkExistingMenus(
+      dates.map((date) => {
+        const [month, day, year] = date.split("/");
+        return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+      })
+    );
+
     const menuUrlsSet = new Set<string>(LINKS);
     console.log(`📍 Found ${menuUrlsSet.size} dining locations to process`);
 
-    const scraperLimit = pLimit(MENU_CONCURRENCY);
-    const rawData = await Promise.all(
-      Array.from(menuUrlsSet).map((url) =>
-        scraperLimit(() => scrapeMenuData(url))
-      )
-    );
+    const allRawData: any[] = [];
+    let totalSkipped = 0;
 
-    console.log("🎉 Scraping complete!");
+    // Process each date
+    for (let dateIndex = 0; dateIndex < dates.length; dateIndex++) {
+      const currentDate = dates[dateIndex];
+      const dbDate = (() => {
+        const [month, day, year] = currentDate.split("/");
+        return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+      })();
 
-    const data = rawData.filter((item) => item !== null);
+      console.log(
+        `\n📆 Processing date ${dateIndex + 1}/${dates.length}: ${currentDate}`
+      );
+
+      // Filter URLs for this date, skipping those that already exist (except for today's date)
+      const urlsToProcess: string[] = [];
+      const isToday = dateIndex === 0; // Today is always the first date in the range
+
+      for (const baseUrl of menuUrlsSet) {
+        const urlObj = new URL(baseUrl);
+        const locationName =
+          urlObj.searchParams.get("locationName")?.trim() || "Unknown Location";
+        const existingKey = `${locationName}|${dbDate}`;
+
+        if (!isToday && existingMenus.has(existingKey)) {
+          console.log(
+            `⏭️  Skipping ${locationName} for ${currentDate} - already exists in database`
+          );
+          totalSkipped++;
+        } else {
+          if (isToday && existingMenus.has(existingKey)) {
+            console.log(
+              `🔄 Re-scraping ${locationName} for ${currentDate} (today's date - always updated)`
+            );
+          }
+          const dateUrl = addDateToUrl(baseUrl, currentDate);
+          urlsToProcess.push(dateUrl);
+        }
+      }
+
+      if (urlsToProcess.length === 0) {
+        console.log(
+          `✅ All locations for ${currentDate} already exist in database`
+        );
+        continue;
+      }
+
+      console.log(
+        `🏢 Processing ${urlsToProcess.length} locations for ${currentDate}`
+      );
+
+      const scraperLimit = pLimit(MENU_CONCURRENCY);
+      const rawData = await Promise.all(
+        urlsToProcess.map((url) =>
+          scraperLimit(() => scrapeMenuData(url, currentDate))
+        )
+      );
+
+      const validData = rawData.filter((item) => item !== null);
+      allRawData.push(...validData);
+
+      const dateStats = {
+        locations: validData.length,
+        menus: validData.reduce(
+          (sum, location) => sum + location.menus.length,
+          0
+        ),
+        items: validData.reduce(
+          (sum, location) =>
+            sum +
+            location.menus.reduce(
+              (menuSum, menu) =>
+                menuSum +
+                menu.menuCategories.reduce(
+                  (catSum, category) => catSum + category.foods.length,
+                  0
+                ),
+              0
+            ),
+          0
+        ),
+      };
+
+      console.log(
+        `📊 Date ${currentDate} complete: ${dateStats.locations} locations, ${dateStats.menus} menus, ${dateStats.items} items`
+      );
+    }
+
+    console.log("\n🎉 All dates complete!");
+
+    if (totalSkipped > 0) {
+      console.log(`⏭️  Total skipped (already in database): ${totalSkipped}`);
+    }
+
+    const data = allRawData;
     const totalLocations = data.length;
     const totalMenus = data.reduce(
       (sum, location) => sum + location.menus.length,
       0
     );
     const totalFoodItems = data.reduce(
-      (sum, location) =>
+      (sum: number, location: any) =>
         sum +
         location.menus.reduce(
-          (menuSum, menu) =>
+          (menuSum: number, menu: any) =>
             menuSum +
             menu.menuCategories.reduce(
-              (catSum, category) => catSum + category.foods.length,
+              (catSum: number, category: any) => catSum + category.foods.length,
               0
             ),
           0
@@ -469,7 +666,9 @@ const scrapeMenuData = async (url: string) => {
     );
 
     console.log(
-      `📊 Scraped ${totalLocations} locations, ${totalMenus} menus, ${totalFoodItems} food items`
+      `📊 Final summary: ${dates.length} day${
+        dates.length > 1 ? "s" : ""
+      }, ${totalLocations} location-date combinations, ${totalMenus} menus, ${totalFoodItems} food items`
     );
 
     // Generate json file
