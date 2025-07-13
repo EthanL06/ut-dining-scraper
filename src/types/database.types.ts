@@ -99,6 +99,36 @@ export type Database = {
           },
         ]
       }
+      app_information: {
+        Row: {
+          about_description: string | null
+          about_title: string | null
+          created_at: string
+          credits_contributors: Json | null
+          id: string
+          support_links: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          about_description?: string | null
+          about_title?: string | null
+          created_at?: string
+          credits_contributors?: Json | null
+          id?: string
+          support_links?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          about_description?: string | null
+          about_title?: string | null
+          created_at?: string
+          credits_contributors?: Json | null
+          id?: string
+          support_links?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       food_item: {
         Row: {
           allergens_id: number | null
@@ -155,10 +185,14 @@ export type Database = {
           colloquial_name: string | null
           created_at: string | null
           description: string
+          display_order: number
           force_close: boolean
           google_maps_link: string
+          has_menus: boolean | null
           id: string
           image: string | null
+          latitude: number | null
+          longitude: number | null
           meal_times: Json[]
           methods_of_payment: Database["public"]["Enums"]["payment_method"][]
           name: string | null
@@ -172,10 +206,14 @@ export type Database = {
           colloquial_name?: string | null
           created_at?: string | null
           description?: string
+          display_order?: number
           force_close?: boolean
           google_maps_link?: string
+          has_menus?: boolean | null
           id?: string
           image?: string | null
+          latitude?: number | null
+          longitude?: number | null
           meal_times?: Json[]
           methods_of_payment?: Database["public"]["Enums"]["payment_method"][]
           name?: string | null
@@ -189,10 +227,14 @@ export type Database = {
           colloquial_name?: string | null
           created_at?: string | null
           description?: string
+          display_order?: number
           force_close?: boolean
           google_maps_link?: string
+          has_menus?: boolean | null
           id?: string
           image?: string | null
+          latitude?: number | null
+          longitude?: number | null
           meal_times?: Json[]
           methods_of_payment?: Database["public"]["Enums"]["payment_method"][]
           name?: string | null
@@ -236,19 +278,25 @@ export type Database = {
       }
       menu: {
         Row: {
+          date: string
           id: number
           location_id: string | null
           name: string | null
+          updated_at: string | null
         }
         Insert: {
+          date: string
           id?: number
           location_id?: string | null
           name?: string | null
+          updated_at?: string | null
         }
         Update: {
+          date?: string
           id?: number
           location_id?: string | null
           name?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -282,6 +330,68 @@ export type Database = {
             columns: ["menu_id"]
             isOneToOne: false
             referencedRelation: "menu"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_types: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          redirect_url: string | null
+          scheduled_at: string | null
+          sent: boolean
+          title: string | null
+          type: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          redirect_url?: string | null
+          scheduled_at?: string | null
+          sent?: boolean
+          title?: string | null
+          type: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          redirect_url?: string | null
+          scheduled_at?: string | null
+          sent?: boolean
+          title?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_type_fkey"
+            columns: ["type"]
+            isOneToOne: false
+            referencedRelation: "notification_types"
             referencedColumns: ["id"]
           },
         ]
@@ -356,6 +466,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_devices: {
+        Row: {
+          created_at: string | null
+          device_id: string
+          push_token: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          device_id: string
+          push_token?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          device_id?: string
+          push_token?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
     }
     Views: {
