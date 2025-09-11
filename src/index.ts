@@ -679,19 +679,64 @@ const scrapeMenuData = async (url: string, date?: string) => {
     console.log(`💾 Data saved to ${filePath}`);
 
     if (ENABLE_SUPABASE) {
-      console.log("☁️ Inserting into Supabase...");
+      console.log("☁️ Inserting into Supabase (batched by location)...");
 
-      const { data: supabaseData, error } = await supabase.rpc(
-        "insert_multiple_locations_and_menus",
-        {
-          arg_data_array: data as any,
+      // Group data by location name
+      const locationGroups = new Map<string, any[]>();
+      for (const locationData of data) {
+        const locationName = locationData.locationName;
+        if (!locationGroups.has(locationName)) {
+          locationGroups.set(locationName, []);
         }
-      );
+        locationGroups.get(locationName)!.push(locationData);
+      }
 
-      if (error) {
-        console.error("❌ Error inserting data:", error);
-      } else {
-        console.log("✅ Data inserted successfully:", supabaseData);
+      console.log(`📦 Processing ${locationGroups.size} locations separately`);
+
+      let successCount = 0;
+      let failedLocations: string[] = [];
+
+      // Insert each location's data separately
+      for (const [locationName, locationDataArray] of locationGroups) {
+        const itemCount = locationDataArray.reduce(
+          (sum: number, loc: any) =>
+            sum +
+            loc.menus.reduce(
+              (menuSum: number, menu: any) =>
+                menuSum +
+                menu.menuCategories.reduce(
+                  (catSum: number, category: any) => catSum + category.foods.length,
+                  0
+                ),
+              0
+            ),
+          0
+        );
+
+        console.log(
+          `  📍 Inserting ${locationName}: ${locationDataArray.length} date(s), ${itemCount} food items...`
+        );
+
+        const { data: supabaseData, error } = await supabase.rpc(
+          "insert_multiple_locations_and_menus",
+          {
+            arg_data_array: locationDataArray as any,
+          }
+        );
+
+        if (error) {
+          console.error(`    ❌ Error inserting ${locationName}:`, error.message);
+          failedLocations.push(locationName);
+        } else {
+          console.log(`    ✅ ${locationName} inserted successfully`);
+          successCount++;
+        }
+      }
+
+      // Final summary
+      console.log(`\n📊 Insertion complete: ${successCount}/${locationGroups.size} locations succeeded`);
+      if (failedLocations.length > 0) {
+        console.error(`❌ Failed locations: ${failedLocations.join(", ")}`);
       }
     }
 
