@@ -188,7 +188,28 @@ const fetchHtml = async (url: string, retries = 3): Promise<string | null> => {
   return null;
 };
 
-const scrapeNutritionInfo = async (url: string): Promise<Nutrition | null> => {
+// The CONTAINS line on a label spells allergens out in prose, so each one needs a
+// pattern rather than a lookup.  keeps "fish" from matching inside "shellfish".
+const LABEL_ALLERGENS: [keyof AllergenInfo, RegExp][] = [
+  ["beef", /beef/i],
+  ["egg", /egg/i],
+  ["fish", /fish/i],
+  ["milk", /milk/i],
+  ["peanuts", /peanut/i],
+  ["pork", /pork/i],
+  ["shellfish", /shellfish|crustacean/i],
+  ["soy", /soy/i],
+  ["tree_nuts", /tree nut/i],
+  ["wheat", /wheat/i],
+  ["sesame_seeds", /sesame/i],
+];
+
+interface LabelData {
+  nutrition: Nutrition;
+  declared: Partial<AllergenInfo>;
+}
+
+const scrapeLabel = async (url: string): Promise<LabelData | null> => {
   try {
     const html = await fetchHtml(url);
     if (!html) return null;
@@ -224,7 +245,13 @@ const scrapeNutritionInfo = async (url: string): Promise<Nutrition | null> => {
 
     const ingredients = $(".labelingredientsvalue").text().trim() || undefined;
 
-    return {
+    const contains = $(".labelallergensvalue").text();
+    const declared: Partial<AllergenInfo> = {};
+    for (const [key, pattern] of LABEL_ALLERGENS) {
+      if (pattern.test(contains)) declared[key] = true;
+    }
+
+    const nutrition: Nutrition = {
       servingSize,
       calories,
       totalFat: getNutrient("Total Fat") || "0g",
@@ -242,6 +269,8 @@ const scrapeNutritionInfo = async (url: string): Promise<Nutrition | null> => {
       potassium: getNutrient("Potassium") || "0mg",
       ingredients,
     };
+
+    return { nutrition, declared };
   } catch (error) {
     console.error(`🍔 Failed to scrape nutrition for food item:`, error);
     return null;
@@ -448,11 +477,19 @@ const scrapeMenuData = async (url: string, date?: string) => {
                 section.foods.map(async (food) => {
                   if (!food.link) return food;
 
-                  const nutrition = await nutritionLimit(() =>
-                    scrapeNutritionInfo(food.link)
+                  const label = await nutritionLimit(() =>
+                    scrapeLabel(food.link)
                   );
+                  if (!label) return food;
 
-                  return { ...food, nutrition };
+                  // The icons on the menu row miss allergens the label declares, so the
+                  // label wins where the two disagree. Only ever turns a flag on: vegan,
+                  // vegetarian and halal come from the icons and aren't on the label.
+                  return {
+                    ...food,
+                    allergens: { ...food.allergens, ...label.declared },
+                    nutrition: label.nutrition,
+                  };
                 })
               )
             );
